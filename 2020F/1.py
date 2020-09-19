@@ -113,7 +113,12 @@ def calCentroid(id, v, alpha):
         polygon_points.append(rotate_points[2].tolist())
 
     res = calPolygonCentroid(polygon_points)
-    centroid[0] = res[0]
+    # centroid[0] = res[0] #惯性
+    # centroid[2] = res[1] #惯性
+    r1 = -alpha / 180 * np.pi
+    rotateMat1 = np.mat([[np.cos(r1), -np.sin(r1)], [np.sin(r1), np.cos(r1)]])
+    x1 = (rotateMat1 * np.mat(res).T).T.tolist()
+    centroid[0] = res[0]  #飞行
     centroid[2] = res[1]
     return centroid
 
@@ -143,7 +148,9 @@ if __name__ == "__main__":
             v[j] -= q1_data.iloc[i, j + 1] / 850
             oil_m.append(850 * v[j])
             centroidList.append(calCentroid(j, v[j], q2_data.iloc[i, 1]))
+        # x = calTotalCentroid(oil_m, centroidList)  #惯性
         res.append(calTotalCentroid(oil_m, centroidList).tolist())
+        #res.append(calTotalCentroid(oil_m, centroidList).tolist())
     print(res)
 
     f = open(r'result1.txt', 'w')
@@ -154,11 +161,11 @@ if __name__ == "__main__":
         f.write('\n')
     f.close()
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    #ax = fig.gca(projection='3d')
+    # fig = plt.figure()
+    # ax = fig.add_subplot(111)
+    # #ax = fig.gca(projection='3d')
 
-    ax.plot(res[:][0], res[:][1], res[:][2], c='r')
-    plt.show()
+    # ax.plot(res[:][0], res[:][1], res[:][2], c='r')
+    # plt.show()
     #writer.close()
 #print(calCentroid(1, 1.3, 30))
