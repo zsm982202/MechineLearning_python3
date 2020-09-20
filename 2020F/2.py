@@ -17,15 +17,16 @@ import time
 oil_box_info_path = 'F:\\python_workspace\\2020F\\题目\\oil_box_info.xlsx'
 oil_box_data = pd.read_excel(oil_box_info_path)
 
-q1_path = 'F:\\python_workspace\\2020F\\题目\\2020年F题--飞行器质心平衡供油策略优化\\附件4-问题3数据.xlsx'
+q1_path = 'F:\\python_workspace\\2020F\\题目\\2020年F题--飞行器质心平衡供油策略优化\\附件3-问题2数据.xlsx'
 q1_data = pd.read_excel(q1_path)
-q2_data = pd.read_excel(q1_path, sheet_name='飞行器理想质心')
+q2_data = pd.read_excel(q1_path, sheet_name='飞行器理想质心数据')
 U_max = [1.1, 1.8, 1.7, 1.5, 1.6, 1.1]  #输油上限(kg)
 U_add = 0.01
 N = q1_data.iloc[:, 1].tolist()  #需要耗油量list[7200]
+print(max(N))
 C = np.array(q2_data.iloc[:, 1:4])  #理想质心坐标[7200*3]
-V0 = [0.34, 1.6, 1.7, 2.4, 2.6, 0.8]  #初始油量(m^3)
-a_up_max = 0.001  #输油上升加速度上限
+V0 = [0.3, 1.5, 2.1, 1.9, 2.6, 0.8]  #初始油量(m^3)
+a_up_max = 0.1  #输油上升加速度上限
 a_down_max = 0.01  #输油下降加速度上限
 Vm = [0.405, 1.936, 2.376, 2.652, 2.88, 1.2]  #油箱油量上限(m^3)
 
@@ -54,8 +55,6 @@ def calTotalCentroid(v):
     return np.array(s / np.array(sum(oil_m) + 3000))
 
 
-print(calTotalCentroid(V0))
-
 f = open(r'result2.txt', 'w')
 f.flush()
 v_curr = np.array(V0)  #体积
@@ -77,7 +76,10 @@ HHH = 0
 PPP = 0
 res1 = []
 for t in range(7200):
+    #print(v_curr[0])
+    #print(len(flag_curr_index))
     delta = sum(s_curr) / 6
+    # delta = N[t] / 2 + 0.001
     assume_err = []
     for i in range(6):
         if i == 0:
@@ -103,12 +105,24 @@ for t in range(7200):
         max_05 = 0  #辅助油箱16中贡献度大的下标索引
     else:
         max_05 = 5
+    # print(assume_err)
+    # print(max_05)
     g = []
     count = 0
     for j in index_1234:
+        #s_curr[j] * 200 / 850 +
         if v_curr[j] < 0.0001:
             g.append(j)
             count += 1
+            # temp = []
+            # for k in range(4):
+            #     if index_1234[k] != j:
+            #         temp.append(index_1234[k])
+            # temp.append(j)
+            # index_1234 = temp
+            #break
+    if count == 4:
+        print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
     temp = []
     for j in index_1234:
         if j not in g:
@@ -121,6 +135,11 @@ for t in range(7200):
                 s_curr[index_1234[i]] = N[t] / 2
             else:
                 s_curr[index_1234[i]] = random.uniform(a_up_max / 2, a_up_max)
+            #s_curr[index_1234[i]] = N[t] / 2
+            # if N[t] != 0 and s_curr[index_1234[i]] < min(U_add + 0.5 * N[t], U_max[index_1234[i]]) - a_up_max:
+            #     s_curr[index_1234[i]] += random.uniform(a_up_max / 2, a_up_max)
+            #     #s_curr[index_1234[i]] = N[t] / 2
+            #print(s_curr)
             flag_curr[index_1234[i]] = 1
             t_start[index_1234[i]] = 0
 
@@ -135,10 +154,15 @@ for t in range(7200):
                 break
         else:
             if i < 2 and index_1234[i] in flag_curr_index:
+                #counter += 1
                 if N[t] != 0:
                     s_curr[index_1234[i]] = N[t] / 2
                 else:
                     s_curr[index_1234[i]] = random.uniform(a_up_max / 2, a_up_max)
+                #s_curr[index_1234[i]] = N[t] / 2
+                # if N[t] != 0 and s_curr[index_1234[i]] < min(U_add + 0.5 * N[t], U_max[index_1234[i]]) - a_up_max:
+                #     s_curr[index_1234[i]] += random.uniform(a_up_max / 2, a_up_max)
+                #     #s_curr[index_1234[i]] = N[t] / 2
             if i >= 2 and index_1234[i] in flag_curr_index:
                 if s_curr[index_1234[i]] > a_down_max:
                     s_curr[index_1234[i]] -= a_down_max
@@ -159,6 +183,9 @@ for t in range(7200):
                                     s_curr[index_1234[k]] = N[t] / 2
                                 else:
                                     s_curr[index_1234[k]] = random.uniform(a_up_max / 2, a_up_max)
+                                # if N[t] != 0 and s_curr[index_1234[k]] < min(U_add + 0.5 * N[t], U_max[index_1234[i]]) - a_up_max:
+                                #     s_curr[index_1234[k]] += random.uniform(a_up_max / 2, a_up_max)
+                                #     #s_curr[index_1234[k]] = N[t] / 2
                                 flag_curr[index_1234[k]] = 1
                                 t_start[index_1234[k]] = t
 
@@ -170,6 +197,10 @@ for t in range(7200):
                                         s_curr[j] = 0
                                 break
 
+    # if v_curr[max_05] < 0.00000001:
+    #     max_05 = 5 - max_05
+    # print(v_curr[0])
+    # print()
     if t == 0:
         s_curr[max_05] = random.uniform(a_up_max / 2, a_up_max)
         flag_curr[max_05] = 1
@@ -209,7 +240,16 @@ for t in range(7200):
         if i != 0 and i != 5:
             h.append(i)
 
+    # else:
+    #     if s_curr[h[0]] > s_curr[h[1]]:
+    #         s_curr[h[0]] = N[t] - s_curr[h[1]]
+    #     else:
+    #         s_curr[h[1]] = N[t] - s_curr[h[0]]
+
+    # print(v_curr[0])
+    # print()
     if v_curr[0] < s_curr[0] / 850:
+        #print(v_curr[0], '  ', s_curr[0])
         if v_curr[0] >= 0:
             v_curr[1] += v_curr[0]
         v_curr[0] = 0
@@ -222,6 +262,8 @@ for t in range(7200):
     else:
         v_curr[4] += s_curr[5] / 850
 
+    #print(v_curr[0])
+    #print()
     for j in range(6):
         if v_curr[j] < s_curr[j] / 850:
             s_curr[j] = max(v_curr[j] * 850, 0)
@@ -229,8 +271,36 @@ for t in range(7200):
         else:
             v_curr[j] -= s_curr[j] / 850
 
+        #v_curr[j] = 0
+
     if s_curr[h[0]] + s_curr[h[1]] < N[t]:
         if v_curr[h[0]] + v_curr[h[1]] < (N[t] - s_curr[h[0]] - s_curr[h[1]]) / 850:
+            #FFF += 1
+            # for u in range(1, 5):
+            #     if u not in h:
+            #         s_curr[u] = N[t] / 2
+            #         #s_curr[u] = U_max[u]
+            #         #v_curr[u] -= s_curr[u] / 850
+            #         flag_curr[u] = 1
+            #         t_start[u] = t
+
+            #         # flag_curr_index = []
+            #         # for j in range(6):
+            #         #     if flag_curr[j] == 1:
+            #         #         flag_curr_index.append(j)
+            #     else:
+            #         #v_curr[u] += s_curr[u] / 850
+            #         s_curr[u] = 0
+            #         flag_curr[u] = 0
+
+            #         # flag_curr_index = []
+            #         # for j in range(6):
+            #         #     if flag_curr[j] == 1:
+            #         #         flag_curr_index.append(j)
+            # flag_curr_index = []
+            # for j in range(6):
+            #     if flag_curr[j] == 1:
+            #         flag_curr_index.append(j)
             pass
         else:
             if v_curr[h[0]] > (N[t] - s_curr[h[0]] - s_curr[h[1]]) / 850:
@@ -239,29 +309,62 @@ for t in range(7200):
             else:
                 s_curr[h[1]] += N[t] - s_curr[h[0]] - s_curr[h[1]]
                 v_curr[h[1]] -= (N[t] - s_curr[h[0]] - s_curr[h[1]]) / 850
+            if h[0] == 0 or h[1] == 0:
+                print('gfs')
+            # if s_curr[h[0]] + s_curr[h[1]] < N[t]:
+            #     print(s_curr[h[0]] + s_curr[h[1]] - N[t])
+    # print(v_curr[0])
+    # print()
     h = []
     for i in flag_curr_index:
         if i != 0 and i != 5:
             h.append(i)
+    # if len(h) != 2:
+    #     HHH += 1
     if s_curr[h[0]] + s_curr[h[1]] < N[t]:
+        #print(s_curr[h[0]] + s_curr[h[1]] - N[t])
         if v_curr[h[0]] + v_curr[h[1]] < (N[t] - s_curr[h[0]] - s_curr[h[1]]) / 850 - 0.00000001:
+            #print(t)
             HHH += 1
+
             pass
+        # else:
+        #     if v_curr[h[0]] > (N[t] - s_curr[h[0]] - s_curr[h[1]]) / 850:
+        #         s_curr[h[0]] += N[t] - s_curr[h[0]] - s_curr[h[1]]
+        #         v_curr[h[0]] -= (N[t] - s_curr[h[0]] - s_curr[h[1]]) / 850
+        #     else:
+        #         s_curr[h[1]] += N[t] - s_curr[h[0]] - s_curr[h[1]]
+        #         v_curr[h[1]] -= (N[t] - s_curr[h[0]] - s_curr[h[1]]) / 850
+
     v_assume_curr = v_curr.copy()
     err.append(sum((calTotalCentroid(v_curr) - C[t])**2))
     for j in range(6):
+        #f.write(str(s_curr[j]) + '\t')
         f.write(str(s_curr[j]) + '\t')
         time.sleep(0.00001)
+        #res.append(sum(s_curr[i] for i in range(1, 5)))
     f.write('\n')
     for j in range(6):
         if s_curr[j] < 0:
             FFF += 1
         if v_curr[j] < 0:
             GGG += 1
+    # print(v_curr[0])
+    # print()
 print(max(err))
 print(FFF)
 print(GGG)
 print(HHH)
 print(v_curr)
 print(sum(v_curr))
+
+#print(max(res))
+#print(res)
+# f = open(r'result2.txt', 'w')
+# [h, l] = np.array(res).shape
+# for i in range(h):
+#     for j in range(l):
+#         f.write(str(res[i][j]) + '\t')
+#     f.write('\n')
+#os.fsync()
 f.close()
