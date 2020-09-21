@@ -17,45 +17,143 @@ import time
 oil_box_info_path = 'F:\\python_workspace\\2020F\\题目\\oil_box_info.xlsx'
 oil_box_data = pd.read_excel(oil_box_info_path)
 
-q1_path = 'F:\\python_workspace\\2020F\\题目\\2020年F题--飞行器质心平衡供油策略优化\\附件4-问题3数据.xlsx'
+q1_path = 'F:\\python_workspace\\2020F\\题目\\2020年F题--飞行器质心平衡供油策略优化\\附件5-问题4数据.xlsx'
 q1_data = pd.read_excel(q1_path)
-q2_data = pd.read_excel(q1_path, sheet_name='飞行器理想质心')
+q2_data = pd.read_excel(q1_path, sheet_name='飞行器俯仰角')
 U_max = [1.1, 1.8, 1.7, 1.5, 1.6, 1.1]  #输油上限(kg)
 U_add = 0.01
 N = q1_data.iloc[:, 1].tolist()  #需要耗油量list[7200]
-C = np.array(q2_data.iloc[:, 1:4])  #理想质心坐标[7200*3]
-#V0 = [0.34, 1.6, 1.7, 2.4, 2.6, 0.8]  #初始油量(m^3)
-a_up_max = 0.0001  #输油上升加速度上限
+V0 = [0.3, 1.5, 2.1, 1.9, 2.6, 0.8]  #初始油量(m^3)
+a_up_max = 0.01  #输油上升加速度上限
 a_down_max = 0.01  #输油下降加速度上限
 Vm = [0.405, 1.936, 2.376, 2.652, 2.88, 1.2]  #油箱油量上限(m^3)
-V0 = [0.394, 1.875, 2.214, 2.585, 2.764, 1.195]
+
+#V0 = [0.394, 1.875, 2.214, 2.585, 2.764, 1.195]
 
 
-# id:油箱编号0-5  v:当前油箱内油的体积  return:质心坐标
-def calCentroid(id, v):
+def dist(x, y):
+    return pow((x[0] - y[0])**2 + (x[1] - y[1])**2, 0.5)
+
+
+def calPolygonCentroid(polygon_points):
+    N = len(polygon_points)
+    polygon_points.append(polygon_points[0])
+    A = 0.5 * sum(polygon_points[i][0] * polygon_points[i + 1][1] - polygon_points[i + 1][0] * polygon_points[i][1] for i in range(N))
+    Cx = 1 / (6 * A) * sum(
+        (polygon_points[i][0] + polygon_points[i + 1][0]) * (polygon_points[i][0] * polygon_points[i + 1][1] - polygon_points[i + 1][0] * polygon_points[i][1])
+        for i in range(N))
+    Cy = 1 / (6 * A) * sum(
+        (polygon_points[i][1] + polygon_points[i + 1][1]) * (polygon_points[i][0] * polygon_points[i + 1][1] - polygon_points[i + 1][0] * polygon_points[i][1])
+        for i in range(N))
+    return [Cx, Cy]
+
+
+# id:油箱编号0-5  v:当前油箱内油的体积  alpha:仰俯角(-90,90)角度  return:质心坐标
+def calCentroid(id, v, alpha):
     oil_info = oil_box_data.iloc[id, :]
-    centroid = [oil_info['x'], oil_info['y'], 0]
+    centroid = [0, oil_info['y'], 0]
     s_input = v / oil_info['w']
+    r = alpha / 180 * np.pi
+    rotateMat = np.mat([[np.cos(r), -np.sin(r)], [np.sin(r), np.cos(r)]])
+    initial_points = [[oil_info['x'] - 0.5 * oil_info['l'], oil_info['z'] - 0.5 * oil_info['h']],
+                      [oil_info['x'] + 0.5 * oil_info['l'], oil_info['z'] - 0.5 * oil_info['h']],
+                      [oil_info['x'] - 0.5 * oil_info['l'], oil_info['z'] + 0.5 * oil_info['h']],
+                      [oil_info['x'] + 0.5 * oil_info['l'], oil_info['z'] + 0.5 * oil_info['h']]]
+    rotate_points = []
+    for i in range(4):
+        t = rotateMat * np.mat(initial_points[i]).T
+        rotate_points.append(t.T.tolist())
+    rotate_points = np.squeeze(rotate_points)
+    rotate_points = rotate_points[rotate_points[:, 1].argsort()]
+    #print(initial_points)
+    #print(rotate_points)
+
+    low_points = []
+    high_points = []
+    if r < 0:
+        r += np.pi / 2
+    d = dist(rotate_points[0], rotate_points[1])
+    if r != 0 and rotate_points[1][0] < rotate_points[0][0]:
+        s = 0.5 * d**2 / np.tan(r)
+        low_points.append(rotate_points[1].tolist())
+        low_points.append([rotate_points[1][0] + d / np.sin(r), rotate_points[1][1]])
+        high_points.append([rotate_points[2][0] - d / np.sin(r), rotate_points[2][1]])
+        high_points.append(rotate_points[2].tolist())
+    else:
+        s = 0.5 * d**2 * np.tan(r)
+        low_points.append([rotate_points[1][0] - d / np.cos(r), rotate_points[1][1]])
+        low_points.append(rotate_points[1].tolist())
+        high_points.append(rotate_points[2].tolist())
+        high_points.append([rotate_points[2][0] + d / np.cos(r), rotate_points[2][1]])
     s_total = oil_info['l'] * oil_info['h']
-    centroid[2] = oil_info['z'] - 0.5 * (s_total - s_input) / oil_info['l']
+    polygon_points = []
+    if s_input <= s:
+        #print(1)
+        x = pow(2 * s_input * np.tan(r), 0.5)
+        polygon_points.append(rotate_points[0])
+        # p = x / dist(low_points[0], rotate_points[0]) * np.array(low_points[0] - rotate_points[0]) + rotate_points[0]
+        # polygon_points.append(p.tolist())
+        # q = p
+        # q[0] += x / np.sin(r)
+        # polygon_points.append(q.tolist())
+        rate = pow(s_input / s, 0.5)
+        p = rate * (np.array(low_points[0]) - rotate_points[0]) + rotate_points[0]
+        q = rate * (np.array(low_points[1]) - rotate_points[0]) + rotate_points[0]
+        polygon_points.append(p.tolist())
+        polygon_points.append(q.tolist())
+    elif s_input <= s_total - s:
+        #print(2)
+        polygon_points.append(rotate_points[0].tolist())
+        polygon_points.append(rotate_points[1].tolist())
+        rate = (s_input - s) / (s_total - 2 * s)
+        p = rate * (np.array(high_points[0]) - np.array(low_points[0])) + low_points[0]
+        q = rate * (np.array(high_points[1]) - np.array(low_points[1])) + low_points[1]
+        polygon_points.append(q.tolist())
+        if rotate_points[1][0] < rotate_points[0][0]:
+            polygon_points.append(p.tolist())
+            polygon_points.append(q.tolist())
+        else:
+            polygon_points.append(q.tolist())
+            polygon_points.append(p.tolist())
+    else:
+        #print(3)
+        polygon_points.append(rotate_points[0].tolist())
+        polygon_points.append(rotate_points[1].tolist())
+        s_up = s_total - s_input
+        rate = pow(s_up / s, 0.5)
+        p = rate * (np.array(high_points[0]) - rotate_points[3]) + rotate_points[3]
+        q = rate * (np.array(high_points[1]) - rotate_points[3]) + rotate_points[3]
+        if rotate_points[1][0] < rotate_points[0][0]:
+            polygon_points.append(p.tolist())
+            polygon_points.append(q.tolist())
+        else:
+            polygon_points.append(q.tolist())
+            polygon_points.append(p.tolist())
+        polygon_points.append(rotate_points[2].tolist())
+
+    res = calPolygonCentroid(polygon_points)
+    # centroid[0] = res[0] #惯性
+    # centroid[2] = res[1] #惯性
+    r1 = -alpha / 180 * np.pi
+    rotateMat1 = np.mat([[np.cos(r1), -np.sin(r1)], [np.sin(r1), np.cos(r1)]])
+    x1 = (rotateMat1 * np.mat(res).T).T.tolist()
+    centroid[0] = res[0]  #飞行
+    centroid[2] = res[1]
     return centroid
 
 
-# v:list[6]当前时刻6个油箱内油的体积
-def calTotalCentroid(v):
-    oil_m = 850 * np.array(v)
+def calTotalCentroid(v, alpha):
     centroidList = []
-    for i in range(6):
-        centroidList.append(calCentroid(i, v[i]))
-    #print(centroidList)
+    for j in range(6):
+        centroidList.append(calCentroid(j, v[j], alpha))
     s = [0, 0, 0]
     for i in range(6):
         for j in range(3):
-            s[j] += oil_m[i] * centroidList[i][j]
-    return np.array(s / np.array(sum(oil_m) + 3000))
+            s[j] += 850 * v[i] * centroidList[i][j]
+    return s / np.array(850 * sum(v) + 3000)
 
 
-print(calTotalCentroid(V0))
+#print(calTotalCentroid(V0))
 
 f = open(r'result3.txt', 'w')
 f.flush()
@@ -97,7 +195,7 @@ for t in range(7200):
                 v_assume_curr[5] -= Vm[4] - v_assume_curr[4]
         else:
             v_assume_curr[i] -= delta / 850
-        assume_err.append(sum((calTotalCentroid(v_assume_curr) - C[t])**2))
+        assume_err.append(sum(calTotalCentroid(v_assume_curr, q2_data.iloc[t, 1])**2))
         #2345号油箱对质心的贡献度排序(排在前面的表示对质心向理想质心移动贡献大)
         index_1234 = np.array(assume_err[1:5]).argsort() + 1
     if assume_err[0] < assume_err[5]:
@@ -218,7 +316,8 @@ for t in range(7200):
         v_curr[1] += s_curr[0] / 850
 
     if v_curr[5] < s_curr[5] / 850:
-        v_curr[4] += v_curr[5]
+        if v_curr[5] >= 0:
+            v_curr[4] += v_curr[5]
         v_curr[5] = 0
     else:
         v_curr[4] += s_curr[5] / 850
@@ -249,7 +348,7 @@ for t in range(7200):
             HHH += 1
             pass
     v_assume_curr = v_curr.copy()
-    err.append(sum((calTotalCentroid(v_curr) - C[t])**2))
+    err.append(sum(calTotalCentroid(v_curr, q2_data.iloc[t, 1])**2))
     for j in range(6):
         f.write(str(s_curr[j]) + '\t')
         time.sleep(0.00001)

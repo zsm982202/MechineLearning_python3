@@ -9,7 +9,29 @@ import matplotlib.pyplot as plt
 oil_box_info_path = 'F:\\python_workspace\\2020F\\题目\\oil_box_info.xlsx'
 oil_box_data = pd.read_excel(oil_box_info_path)
 
-#print(oil_box_data)
+q1_path = 'F:\\python_workspace\\2020F\\题目\\2020年F题--飞行器质心平衡供油策略优化\\附件2-问题1数据.xlsx'
+q1_data = pd.read_excel(q1_path)
+q2_data = pd.read_excel(q1_path, sheet_name='飞行器俯仰角')
+v = oil_box_data['v0']
+res = []
+for i in range(q1_data.shape[0]):
+    oil_m = []
+    centroidList = []
+    v[1] += q1_data.iloc[i, 1] / 850
+    v[4] += q1_data.iloc[i, 6] / 850
+    for j in range(6):
+        v[j] -= q1_data.iloc[i, j + 1] / 850
+        oil_m.append(850 * v[j])
+        centroidList.append(calCentroid(j, v[j], q2_data.iloc[i, 1]))
+    res.append(calTotalCentroid(oil_m, centroidList).tolist())
+
+f = open(r'result1.txt', 'w')
+[h, l] = np.array(res).shape
+for i in range(h):
+    for j in range(l):
+        f.write(str(res[i][j]) + '\t')
+    f.write('\n')
+f.close()
 
 
 def dist(x, y):
@@ -69,21 +91,14 @@ def calCentroid(id, v, alpha):
     s_total = oil_info['l'] * oil_info['h']
     polygon_points = []
     if s_input <= s:
-        #print(1)
         x = pow(2 * s_input * np.tan(r), 0.5)
         polygon_points.append(rotate_points[0])
-        # p = x / dist(low_points[0], rotate_points[0]) * np.array(low_points[0] - rotate_points[0]) + rotate_points[0]
-        # polygon_points.append(p.tolist())
-        # q = p
-        # q[0] += x / np.sin(r)
-        # polygon_points.append(q.tolist())
         rate = pow(s_input / s, 0.5)
         p = rate * (np.array(low_points[0]) - rotate_points[0]) + rotate_points[0]
         q = rate * (np.array(low_points[1]) - rotate_points[0]) + rotate_points[0]
         polygon_points.append(p.tolist())
         polygon_points.append(q.tolist())
     elif s_input <= s_total - s:
-        #print(2)
         polygon_points.append(rotate_points[0].tolist())
         polygon_points.append(rotate_points[1].tolist())
         rate = (s_input - s) / (s_total - 2 * s)
@@ -97,7 +112,6 @@ def calCentroid(id, v, alpha):
             polygon_points.append(q.tolist())
             polygon_points.append(p.tolist())
     else:
-        #print(3)
         polygon_points.append(rotate_points[0].tolist())
         polygon_points.append(rotate_points[1].tolist())
         s_up = s_total - s_input
@@ -129,43 +143,3 @@ def calTotalCentroid(oil_m, centroidList):
         for j in range(3):
             s[j] += oil_m[i] * centroidList[i][j]
     return s / np.array(sum(oil_m) + 3000)
-
-
-import sys
-if __name__ == "__main__":
-    q1_path = 'F:\\python_workspace\\2020F\\题目\\2020年F题--飞行器质心平衡供油策略优化\\附件2-问题1数据.xlsx'
-    q1_data = pd.read_excel(q1_path)
-    q2_data = pd.read_excel(q1_path, sheet_name='飞行器俯仰角')
-    #print(q2_data.shape[0])
-    v = oil_box_data['v0']
-    res = []
-    for i in range(q1_data.shape[0]):
-        oil_m = []
-        centroidList = []
-        v[1] += q1_data.iloc[i, 1] / 850
-        v[4] += q1_data.iloc[i, 6] / 850
-        for j in range(6):
-            v[j] -= q1_data.iloc[i, j + 1] / 850
-            oil_m.append(850 * v[j])
-            centroidList.append(calCentroid(j, v[j], q2_data.iloc[i, 1]))
-        # x = calTotalCentroid(oil_m, centroidList)  #惯性
-        res.append(calTotalCentroid(oil_m, centroidList).tolist())
-        #res.append(calTotalCentroid(oil_m, centroidList).tolist())
-    print(res)
-
-    f = open(r'result1.txt', 'w')
-    [h, l] = np.array(res).shape
-    for i in range(h):
-        for j in range(l):
-            f.write(str(res[i][j]) + '\t')
-        f.write('\n')
-    f.close()
-
-    # fig = plt.figure()
-    # ax = fig.add_subplot(111)
-    # #ax = fig.gca(projection='3d')
-
-    # ax.plot(res[:][0], res[:][1], res[:][2], c='r')
-    # plt.show()
-    #writer.close()
-#print(calCentroid(1, 1.3, 30))
